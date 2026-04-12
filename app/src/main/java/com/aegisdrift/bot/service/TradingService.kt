@@ -1,4 +1,5 @@
 package com.aegisdrift.bot.service
+import com.aegisdrift.bot.data.TradingMode
 
 import android.app.*
 import android.content.Intent
