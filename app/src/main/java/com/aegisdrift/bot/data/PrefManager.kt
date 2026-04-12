@@ -3,6 +3,13 @@ package com.aegisdrift.bot.data
 import android.content.Context
 import android.content.SharedPreferences
 
+// Trading modes
+object TradingMode {
+    const val PAPER  = "PAPER"   // fully local, no API needed
+    const val DEMO   = "DEMO"    // Bitget paper trading via API
+    const val LIVE   = "LIVE"    // real money via API
+}
+
 class PrefManager(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -20,9 +27,10 @@ class PrefManager(context: Context) {
         get() = prefs.getString("api_passphrase", "") ?: ""
         set(v) = prefs.edit().putString("api_passphrase", v).apply()
 
-    var isDemoMode: Boolean
-        get() = prefs.getBoolean("demo_mode", true)
-        set(v) = prefs.edit().putBoolean("demo_mode", v).apply()
+    // Single trading mode replaces isDemoMode + isPaperMode
+    var tradingMode: String
+        get() = prefs.getString("trading_mode", TradingMode.PAPER) ?: TradingMode.PAPER
+        set(v) = prefs.edit().putString("trading_mode", v).apply()
 
     var startBalance: Double
         get() = prefs.getFloat("start_balance", 100f).toDouble()
