@@ -21,11 +21,11 @@ import com.aegisdrift.bot.ui.theme.*
 @Composable
 fun DashboardScreen(vm: BotViewModel = viewModel()) {
     val isRunning by vm.isRunning.collectAsState()
-    val equity    by vm.equity.collectAsState()
-    val btc       by vm.btcState.collectAsState()
-    val eth       by vm.ethState.collectAsState()
-    val trades    by vm.trades.collectAsState()
-    val isDemo    by vm.isDemoMode.collectAsState()
+    val equity by vm.equity.collectAsState()
+    val btc by vm.btcState.collectAsState()
+    val eth by vm.ethState.collectAsState()
+    val trades by vm.trades.collectAsState()
+    val tradingMode by vm.tradingMode.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -35,7 +35,6 @@ fun DashboardScreen(vm: BotViewModel = viewModel()) {
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ── Header ────────────────────────────────────────────────────
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -43,37 +42,52 @@ fun DashboardScreen(vm: BotViewModel = viewModel()) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("⚡ Aegis Drift Bot",
-                        color = Cyan400, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text(if (isDemo) "● DEMO MODE" else "● LIVE MODE",
-                        color = if (isDemo) Yellow400 else Green400, fontSize = 12.sp)
+                    Text(
+                        "⚡ Aegis Drift Bot",
+                        color = Cyan400,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        when (tradingMode) {
+                            "PAPER" -> "● PAPER MODE"
+                            "DEMO" -> "● DEMO MODE"
+                            else -> "● LIVE MODE"
+                        },
+                        color = if (tradingMode == "LIVE") Green400 else Yellow400,
+                        fontSize = 12.sp
+                    )
                 }
                 Button(
                     onClick = { if (isRunning) vm.stopBot() else vm.startBot() },
-                    colors  = ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = if (isRunning) Red400 else Green400
                     ),
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     Text(
                         if (isRunning) "⏹ STOP" else "▶ START",
-                        color = Color.Black, fontWeight = FontWeight.Bold
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
 
-        // ── Equity card ───────────────────────────────────────────────
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardDark),
-                shape  = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Total Equity", color = Color.Gray, fontSize = 13.sp)
-                    Text("$${"%.2f".format(equity)}",
-                        color = Cyan400, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "$${"%.2f".format(equity)}",
+                        color = Cyan400,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(
                         if (isRunning) "🟢 Bot Active" else "🔴 Bot Stopped",
                         color = if (isRunning) Green400 else Red400,
@@ -83,22 +97,26 @@ fun DashboardScreen(vm: BotViewModel = viewModel()) {
             }
         }
 
-        // ── BTC Card ──────────────────────────────────────────────────
         item { SymbolCard(state = btc) }
-
-        // ── ETH Card ──────────────────────────────────────────────────
         item { SymbolCard(state = eth) }
 
-        // ── Trade history ─────────────────────────────────────────────
         item {
-            Text("Trade History", color = Color.Gray,
-                fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(
+                "Trade History",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
 
         if (trades.isEmpty()) {
             item {
-                Text("No trades yet", color = Color.DarkGray,
-                    fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+                Text(
+                    "No trades yet",
+                    color = Color.DarkGray,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(8.dp)
+                )
             }
         } else {
             items(trades) { trade -> TradeRow(trade) }
@@ -106,59 +124,80 @@ fun DashboardScreen(vm: BotViewModel = viewModel()) {
     }
 }
 
-// ── Symbol card (BTC or ETH) ──────────────────────────────────────────
 @Composable
 fun SymbolCard(state: SymbolState) {
     val posColor = when (state.position) {
-        1    -> Green400
-        -1   -> Red400
+        1 -> Green400
+        -1 -> Red400
         else -> Color.Gray
     }
     val posLabel = when (state.position) {
-        1    -> "LONG"
-        -1   -> "SHORT"
+        1 -> "LONG"
+        -1 -> "SHORT"
         else -> "FLAT"
     }
+
     Card(
-        colors   = CardDefaults.cardColors(containerColor = CardDark),
-        shape    = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-
-            Row(horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()) {
-                Text(state.symbol, color = Cyan400,
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(posLabel, color = posColor,
-                    fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    state.symbol,
+                    color = Cyan400,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    posLabel,
+                    color = posColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            Row(horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()) {
-                StatItem("Price",  "${"%.2f".format(state.currentPrice)}")
-                StatItem("AVWAP",  "${"%.2f".format(state.currentAvwap)}")
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                StatItem("Price", "${"%.2f".format(state.currentPrice)}")
+                StatItem("AVWAP", "${"%.2f".format(state.currentAvwap)}")
                 StatItem("Signal", state.lastSignal)
             }
 
-            Row(horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()) {
-                StatItem("Unrealized PnL",
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                StatItem(
+                    "Unrealized PnL",
                     "${"%.4f".format(state.unrealizedPnl)}",
-                    if (state.unrealizedPnl >= 0) Green400 else Red400)
-                StatItem("Session PnL",
+                    if (state.unrealizedPnl >= 0) Green400 else Red400
+                )
+                StatItem(
+                    "Session PnL",
                     "${"%.4f".format(state.sessionPnl)}",
-                    if (state.sessionPnl >= 0) Green400 else Red400)
+                    if (state.sessionPnl >= 0) Green400 else Red400
+                )
                 StatItem("Win Rate", "${"%.1f".format(state.winRate)}%")
             }
 
             if (state.position != 0) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()) {
-                    StatItem("Entry",  "${"%.2f".format(state.entryPrice)}")
-                    StatItem("Stop",   "${"%.2f".format(state.stopPrice)}", Red400)
-                    StatItem("Qty",    "${"%.5f".format(state.qty)}")
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    StatItem("Entry", "${"%.2f".format(state.entryPrice)}")
+                    StatItem("Stop", "${"%.2f".format(state.stopPrice)}", Red400)
+                    StatItem("Qty", "${"%.5f".format(state.qty)}")
                 }
             }
         }
@@ -173,16 +212,15 @@ fun StatItem(label: String, value: String, valueColor: Color = Color.White) {
     }
 }
 
-// ── Trade history row ─────────────────────────────────────────────────
 @Composable
 fun TradeRow(trade: TradeEntity) {
-    val pnl      = trade.netPnlUsd ?: 0.0
+    val pnl = trade.netPnlUsd ?: 0.0
     val pnlColor = if (pnl >= 0) Green400 else Red400
-    val sideColor= if (trade.side == "long") Green400 else Red400
+    val sideColor = if (trade.side == "long") Green400 else Red400
 
     Card(
-        colors   = CardDefaults.cardColors(containerColor = SurfaceDark),
-        shape    = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+        shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -191,8 +229,12 @@ fun TradeRow(trade: TradeEntity) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(trade.side.uppercase(), color = sideColor,
-                    fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    trade.side.uppercase(),
+                    color = sideColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(trade.entryTime.take(16), color = Color.Gray, fontSize = 11.sp)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -200,9 +242,12 @@ fun TradeRow(trade: TradeEntity) {
                 Text("→ ${"%.2f".format(trade.exitPrice ?: 0.0)}", color = Color.Gray, fontSize = 11.sp)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(if (trade.status == "OPEN") "OPEN" else "${"%.4f".format(pnl)}",
+                Text(
+                    if (trade.status == "OPEN") "OPEN" else "${"%.4f".format(pnl)}",
                     color = if (trade.status == "OPEN") Yellow400 else pnlColor,
-                    fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(trade.exitReason ?: "running", color = Color.Gray, fontSize = 11.sp)
             }
         }
