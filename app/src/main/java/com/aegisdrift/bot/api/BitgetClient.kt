@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import android.util.Base64
+import com.aegisdrift.bot.data.TradingMode
 
 data class Candle(
     val openTime: Long,
@@ -24,18 +25,17 @@ class BitgetClient(
     private val apiKey: String,
     private val apiSecret: String,
     private val passphrase: String,
-    private val demo: Boolean = true
+    private val tradingMode: String = TradingMode.PAPER
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val gson = Gson()
-    private val BASE = "https://api.bitget.com"
+    private val gson    = Gson()
+    private val BASE    = "https://api.bitget.com"
     private val JSON_MT = "application/json; charset=utf-8".toMediaType()
 
-    // ── Fetch last N candles ──────────────────────────────────────────
     fun fetchCandles(symbol: String, granularity: String, limit: Int = 200): List<Candle> {
         val params = "symbol=$symbol&productType=USDT-FUTURES&granularity=$granularity&limit=$limit"
         val path   = "/api/v2/mix/market/history-candles?$params"
@@ -45,7 +45,8 @@ class BitgetClient(
             .get().build()
 
         val body = client.newCall(req).execute().body?.string() ?: return emptyList()
-        val map  = gson.fromJson<Map<String, Any>>(body, object : TypeToken<Map<String, Any>>() {}.type)
+        val map  = gson.fromJson<Map<String, Any>>(
+            body, object : TypeToken<Map<String, Any>>() {}.type)
         if (map["code"] != "00000") return emptyList()
 
         @Suppress("UNCHECKED_CAST")
@@ -64,12 +65,25 @@ class BitgetClient(
         }.sortedBy { it.openTime }
     }
 
-    // ── Place order ───────────────────────────────────────────────────
     fun placeOrder(
         symbol: String,
-        side: String,       // "buy" or "sell"
-        size: String,       // qty in base currency
+        side: String,
+        size: String,
         reduceOnly: Boolean = false
+    ): Boolean {
+        return when (tradingMode) {
+            TradingMode.PAPER -> true
+            TradingMode.DEMO,
+            TradingMode.LIVE  -> sendOrder(symbol, side, size, reduceOnly)
+            else              -> true
+        }
+    }
+
+    private fun sendOrder(
+        symbol: String,
+        side: String,
+        size: String,
+        reduceOnly: Boolean
     ): Boolean {
         val path = "/api/v2/mix/order/place-order"
         val payload = mapOf(
@@ -83,9 +97,9 @@ class BitgetClient(
             "reduceOnly"  to reduceOnly.toString(),
             "tradeSide"   to if (reduceOnly) "close" else "open"
         )
-        val bodyStr  = gson.toJson(payload)
-        val ts       = System.currentTimeMillis().toString()
-        val sign     = sign(ts, "POST", path, bodyStr)
+        val bodyStr = gson.toJson(payload)
+        val ts      = System.currentTimeMillis().toString()
+        val sign    = sign(ts, "POST", path, bodyStr)
 
         val req = Request.Builder()
             .url("$BASE$path")
@@ -94,16 +108,18 @@ class BitgetClient(
             .addHeader("ACCESS-TIMESTAMP",  ts)
             .addHeader("ACCESS-PASSPHRASE", passphrase)
             .addHeader("locale",            "en-US")
-            .apply { if (demo) addHeader("paptrading", "1") }
+            .apply {
+                if (tradingMode == TradingMode.DEMO) addHeader("paptrading", "1")
+            }
             .post(bodyStr.toRequestBody(JSON_MT))
             .build()
 
         val resp = client.newCall(req).execute().body?.string() ?: return false
-        val map  = gson.fromJson<Map<String, Any>>(resp, object : TypeToken<Map<String, Any>>() {}.type)
+        val map  = gson.fromJson<Map<String, Any>>(
+            resp, object : TypeToken<Map<String, Any>>() {}.type)
         return map["code"] == "00000"
     }
 
-    // ── HMAC-SHA256 signature ─────────────────────────────────────────
     private fun sign(timestamp: String, method: String, path: String, body: String): String {
         val message = "$timestamp$method$path$body"
         val mac     = Mac.getInstance("HmacSHA256")
