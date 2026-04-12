@@ -14,6 +14,6 @@ class BotApplication : Application() {
         super.onCreate()
         prefs = PrefManager(this)
         db    = AppDatabase.getInstance(this)
-        Log.i("BotApplication", "App started — demo=${prefs.isDemoMode}")
+        Log.i("BotApplication", "App started — mode=${prefs.tradingMode}")
     }
 }
