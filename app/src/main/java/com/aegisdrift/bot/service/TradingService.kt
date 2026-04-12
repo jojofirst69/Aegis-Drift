@@ -38,8 +38,9 @@ class TradingService : Service() {
         super.onCreate()
         prefs    = PrefManager(this)
         db       = AppDatabase.getInstance(this)
-        client   = BitgetClient(prefs.apiKey, prefs.apiSecret, prefs.apiPassphrase, prefs.isDemoMode)
-        executor = TradeExecutor(client, db, prefs)
+        client = BitgetClient(prefs.apiKey, prefs.apiSecret, prefs.apiPassphrase, prefs.tradingMode == TradingMode.DEMO)
+
+     executor = TradeExecutor(client, db, prefs)
         symbolStates["BTCUSDT"] = btcState
         symbolStates["ETHUSDT"] = ethState
     }
