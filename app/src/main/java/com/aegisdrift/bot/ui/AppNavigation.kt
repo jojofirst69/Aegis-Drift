@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +15,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.aegisdrift.bot.ui.theme.Cyan400
 import com.aegisdrift.bot.ui.theme.SurfaceDark
+
 
 sealed class Screen(val route: String, val label: String, val icon: String) {
     object Dashboard : Screen("dashboard", "Dashboard", "📊")
