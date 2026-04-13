@@ -40,6 +40,13 @@ class PrefManager(context: Context) {
         get() = prefs.getFloat("current_equity", 100f).toDouble()
         set(v) = prefs.edit().putFloat("current_equity", v.toFloat()).apply()
 
+    // 🔥 FIXED: These 2 methods for TradingService equity reset
+    fun getStartBalance(): Double = prefs.getFloat("start_balance", 100.0f).toDouble()
+    
+    fun saveEquity(amount: Double) {
+        edit { putFloat("current_equity", amount.toFloat()) }
+    }
+
     var isBotRunning: Boolean
         get() = prefs.getBoolean("bot_running", false)
         set(v) = prefs.edit().putBoolean("bot_running", v).apply()
@@ -51,4 +58,11 @@ class PrefManager(context: Context) {
     var winCount: Int
         get() = prefs.getInt("win_count", 0)
         set(v) = prefs.edit().putInt("win_count", v).apply()
+
+    // Helper inline function for cleaner edits
+    private inline fun edit(block: SharedPreferences.Editor.() -> Unit) {
+        val editor = prefs.edit()
+        editor.block()
+        editor.apply()
+    }
 }
