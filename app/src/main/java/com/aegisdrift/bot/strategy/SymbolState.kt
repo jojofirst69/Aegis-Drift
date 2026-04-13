@@ -22,6 +22,9 @@ data class SymbolState(
     var currentAvwap: Double = 0.0,
     var anchorSide: String   = "",
     var anchorStop: Double   = 0.0,
+    
+    // 🔥 FIXED: Add equity for TradingService reset
+    var equity: Double       = 100.0,
 
     // Session stats
     var sessionTrades: Int   = 0,
