@@ -69,7 +69,8 @@ class TradingService : Service() {
 
     // FIX 2: Reset equity properly
     private fun resetEquityOnStart() {
-        val startBalance = prefs.getStartBalance()
+        val startBalance = prefs.startBalance
+
         btcState.equity = startBalance
         ethState.equity = startBalance
         btcState.sessionPnl = 0.0
