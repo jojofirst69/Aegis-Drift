@@ -40,9 +40,7 @@ class PrefManager(context: Context) {
         get() = prefs.getFloat("current_equity", 100f).toDouble()
         set(v) = prefs.edit().putFloat("current_equity", v.toFloat()).apply()
 
-    // 🔥 FIXED: These 2 methods for TradingService equity reset
-    fun getStartBalance(): Double = prefs.getFloat("start_balance", 100.0f).toDouble()
-    
+    // 🔥 FIXED: ONLY saveEquity() needed (startBalance already exists)
     fun saveEquity(amount: Double) {
         edit { putFloat("current_equity", amount.toFloat()) }
     }
