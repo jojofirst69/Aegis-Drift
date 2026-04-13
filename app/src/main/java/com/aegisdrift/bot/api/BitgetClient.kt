@@ -1,5 +1,6 @@
 package com.aegisdrift.bot.api
 
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import okhttp3.MediaType.Companion.toMediaType
@@ -35,6 +36,34 @@ class BitgetClient(
     private val gson    = Gson()
     private val BASE    = "https://api.bitget.com"
     private val JSON_MT = "application/json; charset=utf-8".toMediaType()
+
+    // 🔥 FIXED: Fast ticker for live prices (10s updates)
+    suspend fun fetchTicker(symbol: String): Double {
+        val params = "symbol=$symbol&productType=USDT-FUTURES"
+        val path = "/api/v2/mix/market/tickers?$params"
+        val req = Request.Builder()
+            .url("$BASE$path")
+            .addHeader("User-Agent", "Mozilla/5.0")
+            .get().build()
+
+        return try {
+            val body = client.newCall(req).execute().body?.string() ?: return 0.0
+            val map = gson.fromJson<Map<String, Any>>(
+                body, object : TypeToken<Map<String, Any>>() {}.type)
+            
+            if (map["code"] != "00000") return 0.0
+            
+            @Suppress("UNCHECKED_CAST")
+            val tickers = map["data"] as? List<Map<String, Any>> ?: return 0.0
+            val ticker = tickers.firstOrNull() ?: return 0.0
+            
+            Log.d("BitgetClient", "Ticker $symbol: ${(ticker["lastPr"] as? String)}")
+            (ticker["lastPr"] as? String)?.toDoubleOrNull() ?: 0.0
+        } catch (e: Exception) {
+            Log.e("BitgetClient", "Ticker fetch failed: $symbol", e)
+            0.0
+        }
+    }
 
     fun fetchCandles(symbol: String, granularity: String, limit: Int = 200): List<Candle> {
         val params = "symbol=$symbol&productType=USDT-FUTURES&granularity=$granularity&limit=$limit"
