@@ -42,6 +42,9 @@ class TradingService : Service() {
         executor = TradeExecutor(client, db, prefs)
         symbolStates["BTCUSDT"] = btcState
         symbolStates["ETHUSDT"] = ethState
+        
+        // FIX 1: Reset equity on service start
+        resetEquityOnStart()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -64,54 +67,108 @@ class TradingService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // FIX 2: Reset equity properly
+    private fun resetEquityOnStart() {
+        val startBalance = prefs.getStartBalance()
+        btcState.equity = startBalance
+        ethState.equity = startBalance
+        btcState.sessionPnl = 0.0
+        ethState.sessionPnl = 0.0
+        prefs.saveEquity(startBalance)
+        Log.i(TAG, "Equity reset to $startBalance")
+    }
+
+    // FIX 3: Separate price update loop (10s) + strategy loop (60s)
     private fun startBotLoop() {
+        // Price update every 10 seconds
         scope.launch {
             while (isActive) {
                 try {
-                    val btcJob = async { procesSymbol(btcState, "1H") }
-                    val ethJob = async { procesSymbol(ethState, "1H") }
-                    btcJob.await()
-                    ethJob.await()
+                    updatePricesOnly()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Price update failed", e)
+                }
+                delay(10_000L) // 10 seconds
+            }
+        }
+        
+        // Strategy decisions every 60 seconds
+        scope.launch {
+            while (isActive) {
+                try {
+                    procesSymbol(btcState, "1H")
+                    procesSymbol(ethState, "1H")
                     updateNotification()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Bot loop error: ${e.message}")
+                    Log.e(TAG, "Strategy loop error", e)
                 }
                 delay(60_000L)
             }
         }
     }
 
+    // FIX 4: Price-only update (no strategy)
+    private suspend fun updatePricesOnly() {
+        try {
+            val btcPrice = client.fetchTicker("BTCUSDT")
+            val ethPrice = client.fetchTicker("ETHUSDT")
+            
+            btcState.currentPrice = btcPrice
+            ethState.currentPrice = ethPrice
+            btcState.lastUpdate = System.currentTimeMillis()
+            ethState.lastUpdate = System.currentTimeMillis()
+            
+            Log.d(TAG, "Prices updated: BTC=${btcState.currentPrice}, ETH=${ethState.currentPrice}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Price fetch failed", e)
+        }
+    }
+
     private suspend fun procesSymbol(state: SymbolState, granularity: String) {
-        val rawCandles = client.fetchCandles(state.symbol, granularity, 200)
-        if (rawCandles.size < PIVOT_LEN * 2 + 2) {
-            Log.w(TAG, "${state.symbol} not enough candles"); return
-        }
+        try {
+            // FIX 5: Skip historical backfill on first run
+            if (state.lastUpdate == 0L) {
+                Log.i(TAG, "${state.symbol} skipping backfill - live mode only")
+                return
+            }
 
-        val bars = rawCandles.map {
-            Bar(it.openTime, it.open, it.high, it.low, it.close, it.volume)
-        }
+            val rawCandles = client.fetchCandles(state.symbol, granularity, 50) // Reduced from 200
+            if (rawCandles.size < PIVOT_LEN * 2 + 2) {
+                Log.w(TAG, "${state.symbol} not enough candles"); return
+            }
 
-        state.currentPrice = bars.last().close
-        state.lastUpdate   = System.currentTimeMillis()
+            val bars = rawCandles.map {
+                Bar(it.openTime, it.open, it.high, it.low, it.close, it.volume)
+            }
 
-        val result         = StrategyEngine.getSignal(bars, state.position)
-        state.currentAvwap = result.avwap
-        state.anchorSide   = result.anchorSide
-        state.anchorStop   = result.anchorStop
+            state.currentPrice = bars.last().close
+            state.lastUpdate   = System.currentTimeMillis()
 
-        if (state.position == 1 && state.currentPrice <= state.stopPrice) {
-            executor.closePosition(state, state.currentPrice, "stop_loss"); return
-        }
-        if (state.position == -1 && state.currentPrice >= state.stopPrice) {
-            executor.closePosition(state, state.currentPrice, "stop_loss"); return
-        }
+            val result = StrategyEngine.getSignal(bars, state.position)
+            state.currentAvwap = result.avwap
+            state.anchorSide   = result.anchorSide
+            state.anchorStop   = result.anchorStop
 
-        when (result.signal) {
-            Signal.LONG_ENTRY  -> executor.openLong(state, state.currentPrice, result.anchorStop)
-            Signal.SHORT_ENTRY -> executor.openShort(state, state.currentPrice, result.anchorStop)
-            Signal.LONG_EXIT   -> executor.closePosition(state, state.currentPrice, "signal_exit")
-            Signal.SHORT_EXIT  -> executor.closePosition(state, state.currentPrice, "signal_exit")
-            Signal.NONE        -> Log.d(TAG, "${state.symbol} no signal")
+            // Stop loss checks
+            if (state.position == 1 && state.currentPrice <= state.stopPrice) {
+                executor.closePosition(state, state.currentPrice, "stop_loss")
+                return
+            }
+            if (state.position == -1 && state.currentPrice >= state.stopPrice) {
+                executor.closePosition(state, state.currentPrice, "stop_loss")
+                return
+            }
+
+            // Entry/exit signals (only live data)
+            when (result.signal) {
+                Signal.LONG_ENTRY  -> executor.openLong(state, state.currentPrice, result.anchorStop)
+                Signal.SHORT_ENTRY -> executor.openShort(state, state.currentPrice, result.anchorStop)
+                Signal.LONG_EXIT   -> executor.closePosition(state, state.currentPrice, "signal_exit")
+                Signal.SHORT_EXIT  -> executor.closePosition(state, state.currentPrice, "signal_exit")
+                Signal.NONE        -> Log.d(TAG, "${state.symbol} no signal")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "${state.symbol} processing failed", e)
         }
     }
 
@@ -139,7 +196,8 @@ class TradingService : Service() {
     private fun updateNotification() {
         val btcPnl = "BTC: ${"%.2f".format(btcState.sessionPnl)}$"
         val ethPnl = "ETH: ${"%.2f".format(ethState.sessionPnl)}$"
+        val prices = "BTC:${"%.0f".format(btcState.currentPrice)} ETH:${"%.0f".format(ethState.currentPrice)}"
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIF_ID, buildNotification("$btcPnl | $ethPnl"))
+            .notify(NOTIF_ID, buildNotification("$btcPnl | $prices"))
     }
 }
